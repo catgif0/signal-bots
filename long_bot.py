@@ -36,21 +36,33 @@ def monitor_pairs():
             current_price = price_data.get("price", None)
             price_change_24h = price_data.get("price_change_24h", None)
             
+            if current_price is None:
+                logging.warning(f"Price data for {symbol} is None, skipping.")
+                continue
+
             # Append current price to history
             price_history[symbol].append(current_price)
 
             # Format current price to four decimal places
-            formatted_price = f"{current_price:.4f}" if current_price is not None else "N/A"
+            formatted_price = f"{current_price:.4f}"
 
             # Fetch volume data
             current_volume = get_volume(symbol)
+            if current_volume is None:
+                logging.warning(f"Volume data for {symbol} is None, skipping.")
+                continue
+
             volume_history[symbol].append(current_volume)
 
             # Calculate OI change for 1m (using stored OI history)
             prev_oi = oi_history[symbol][-1] if len(oi_history[symbol]) >= 2 else None
             current_oi = get_open_interest_change(symbol, '1m')
-            oi_history[symbol].append(current_oi)
-            oi_change_1m = ((current_oi - prev_oi) / prev_oi) * 100 if prev_oi is not None else None
+            
+            if current_oi is None or prev_oi is None:
+                logging.warning(f"OI data for {symbol} is missing, skipping OI comparison.")
+                oi_change_1m = None
+            else:
+                oi_change_1m = ((current_oi - prev_oi) / prev_oi) * 100
 
             # Calculate price and volume changes (with safe fallback to None)
             price_change_1m = ((current_price - price_history[symbol][-2]) / price_history[symbol][-2]) * 100 if len(price_history[symbol]) >= 2 and price_history[symbol][-2] is not None else None
