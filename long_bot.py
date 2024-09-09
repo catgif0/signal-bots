@@ -1,3 +1,8 @@
+import time
+import requests
+import os
+import logging  # Ensure this is imported
+from collections import deque
 from services.signal_generation import generate_signal  # Assuming your architecture
 from services.telegram import send_telegram_message  # Assuming your architecture
 from services.binance_api import get_open_interest_change, get_price_data, get_volume  # Assuming your architecture
