@@ -9,10 +9,10 @@ from services.binance_api import get_open_interest_change, get_price_data, get_v
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Symbols to monitor
-SYMBOLS = ['HFTUSDT', 'XVSUSDT', 'LSKUSDT', 'ONGUSDT', 'BNTUSDT', 'BTCDOMUSDT', 'MTLUSDT', 
+SYMBOLS = ['HFTUSDT', 'XVSUSDT', 'LSKUSDT', 'ONGUSDT', 'BNTUSDT', 'MANAUSDT', 'MTLUSDT', 
            'ORBSUSDT', 'ARKUSDT', 'TIAUSDC', 'ICXUSDT', 'ONEUSDT', 'AGLDUSDT', 'TWTUSDT']
 
-# Price and volume history to track changes over time intervals
+# Price, volume, and OI history to track changes over time intervals
 price_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 volume_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 oi_history = {symbol: deque(maxlen=2) for symbol in SYMBOLS}  # Store 1m OI changes for each symbol
