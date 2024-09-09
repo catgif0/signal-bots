@@ -2,4 +2,5 @@ fastapi
 uvicorn
 websocket-client
 requests
-schedule 
+schedule
+numpy
