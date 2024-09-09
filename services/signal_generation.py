@@ -5,55 +5,72 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 # Example thresholds for signal generation
 THRESHOLDS = {
-    'OI': {'step1': 1.0, 'step2': 1.5, 'step3': 1.5, 'step4': 1.5},
-    'Price': {'step1': 0.5, 'step2': 1.3, 'step3': 1.3, 'step4': 1.3},
-    'Volume': {'step1': 5.0, 'step2': 12.0, 'step3': 12.0, 'step4': 12.0}
+    'OI': {'1m': 1.0},  # OI change threshold for 1m
+    'Price': {'1m': 1.0},  # Price change threshold for 1m
+    'Volume': {'1m': 20.0}  # Volume change threshold for 1m (20% increase)
 }
 
-# Calculate take-profit and stop-loss
+# Example take-profit and stop-loss calculations
 def calculate_take_profit(current_price, reward_ratio=2):
-    return [current_price + current_price * 0.02 * i for i in range(1, 4)]
+    return [
+        current_price + current_price * 0.02 * i for i in range(1, 4)
+    ]
 
 def calculate_stop_loss(current_price):
     return current_price * 0.98
 
-# Helper function to safely compare values, ignoring None values
-def safe_compare(value, threshold):
-    if value is None:
-        return False
-    return value > threshold
-
 # Signal generation logic
 def generate_signal(pair, current_price, oi_changes, price_changes, volume_changes):
-    if (safe_compare(oi_changes['1m'], THRESHOLDS['OI']['step1']) and
-        safe_compare(price_changes['1m'], THRESHOLDS['Price']['step1']) and
-        safe_compare(volume_changes['1m'], THRESHOLDS['Volume']['step1'])):
-        
-        stop_loss = calculate_stop_loss(current_price)
-        take_profit = calculate_take_profit(current_price)
-        logging.info(f"STEP 1: INITIAL REVERSAL SPOTTED (1m Data)!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nStop Loss: ${stop_loss:.2f}\nTP1: ${take_profit[0]:.2f}, TP2: ${take_profit[1]:.2f}, TP3: ${take_profit[2]:.2f}")
-        return True
+    """
+    Signal generation logic based on the OI, price, and volume changes.
+    
+    Args:
+    pair: str: The pair being analyzed (e.g., BTCUSDT)
+    current_price: float: The current price of the asset
+    oi_changes: dict: Dictionary containing OI changes for different timeframes (1m, 5m, 15m, 1h, 24h)
+    price_changes: dict: Dictionary containing price changes for different timeframes
+    volume_changes: dict: Dictionary containing volume changes for different timeframes
+    
+    Returns:
+    bool: True if signal is generated, False otherwise
+    """
 
-    elif (safe_compare(oi_changes['5m'], THRESHOLDS['OI']['step2']) and
-          safe_compare(price_changes['5m'], THRESHOLDS['Price']['step2']) and
-          safe_compare(volume_changes['5m'], THRESHOLDS['Volume']['step2'])):
+    # Condition 1: 1m OI change must be positive and above the threshold
+    if oi_changes['1m'] > THRESHOLDS['OI']['1m']:
         
-        logging.info(f"STEP 2: TREND CONFIRMED AFTER 5-15 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend sustains. Consider re-entry or adjusting positions.")
-        return True
-
-    elif (safe_compare(oi_changes['15m'], THRESHOLDS['OI']['step3']) and
-          safe_compare(price_changes['15m'], THRESHOLDS['Price']['step3']) and
-          safe_compare(volume_changes['15m'], THRESHOLDS['Volume']['step3'])):
-        
-        logging.info(f"STEP 3: TREND CONFIRMED AFTER 15-60 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend continues. Strong signals of a lasting reversal.")
-        return True
-
-    elif (safe_compare(oi_changes['1h'], THRESHOLDS['OI']['step4']) and
-          safe_compare(price_changes['1h'], THRESHOLDS['Price']['step4']) and
-          safe_compare(volume_changes['1h'], THRESHOLDS['Volume']['step4'])):
-        
-        logging.info(f"STEP 4: TREND SUSTAINED FOR 1 HOUR!\nPAIR: {pair}\nPrice: ${current_price:.2f}")
-        return True
-
-    else:
-        return False
+        # Condition 2: All other OI changes (5m, 15m, 1h, 24h) must be negative
+        if all(oi_changes[tf] < 0 for tf in ['5m', '15m', '1h', '24h']):
+            
+            # Condition 3: Price change must be more than 1% in the last minute
+            if price_changes['1m'] > THRESHOLDS['Price']['1m']:
+                
+                # Condition 4: Volume change must be more than 20% in the last minute
+                if volume_changes['1m'] > THRESHOLDS['Volume']['1m']:
+                    
+                    # Generate signal
+                    stop_loss = calculate_stop_loss(current_price)
+                    take_profit = calculate_take_profit(current_price)
+                    
+                    signal_message = (
+                        f"STEP 1: INITIAL REVERSAL SPOTTED (1m Data)!\n\n"
+                        f"PAIR: {pair}\n"
+                        f"Price: ${current_price:.3f}\n"
+                        f"Stop Loss: ${stop_loss:.3f}\n"
+                        f"TP1: ${take_profit[0]:.3f}, TP2: ${take_profit[1]:.3f}, TP3: ${take_profit[2]:.3f}\n\n"
+                        f"🔴 #{pair} ${current_price:.3f} | OI changed in 1m\n\n"
+                        f"┌ 🌐 Open Interest \n"
+                        f"├ 🟩{oi_changes['1m']:.3f}% (1m)\n"
+                        f"├ 🟥{oi_changes['5m']:.3f}% (5m)\n"
+                        f"├ 🟥{oi_changes['15m']:.3f}% (15m)\n"
+                        f"├ 🟥{oi_changes['1h']:.3f}% (1h)\n"
+                        f"└ 🟥{oi_changes['24h']:.3f}% (24h)\n\n"
+                        f"┌ 📈 Price change \n"
+                        f"├ 🟩{price_changes['1m']:.3f}% (1m)\n"
+                        f"└ Volume change 🟩{volume_changes['1m']:.3f}% (1m)"
+                    )
+                    
+                    logging.info(f"Signal Generated: {signal_message}")
+                    return signal_message
+                
+    logging.info(f"No signal generated for {pair}.")
+    return False
