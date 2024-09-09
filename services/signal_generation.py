@@ -1,83 +1,83 @@
 import time
 import logging
 
-signal_status = {}  # Dictionary to store signal statuses per symbol
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes):
-    global signal_status
-    
-    # Initialize signal status for the symbol if not already present
-    if symbol not in signal_status:
-        signal_status[symbol] = {
-            'step': 0,  # No signal yet
-            'last_signal_time': time.time()  # Track time of last signal
-        }
-    
-    # Log the fetched changes for debugging purposes
-    logging.debug(f"OI Changes for {symbol}: {oi_changes}")
-    logging.debug(f"Price Changes for {symbol}: {price_changes}")
-    logging.debug(f"Volume Changes for {symbol}: {volume_changes}")
-    
-    # Conditions for the initial reversal based on 1-minute data (Step 1)
-    oi_condition_1m = oi_changes.get("1m") is not None and oi_changes["1m"] > 1.0
-    price_condition_1m = price_changes.get("1m") is not None and price_changes["1m"] > 0.5
-    volume_condition_1m = volume_changes.get("1m") is not None and volume_changes["1m"] > 5.0
+# Example thresholds for signal generation
+THRESHOLDS = {
+    'OI': {'step1': 1.0, 'step2': 1.5, 'step3': 1.5, 'step4': 1.5},
+    'Price': {'step1': 0.5, 'step2': 1.3, 'step3': 1.3, 'step4': 1.3},
+    'Volume': {'step1': 5.0, 'step2': 12.0, 'step3': 12.0, 'step4': 12.0}
+}
 
-    # Initial reversal signal (Step 1)
-    if signal_status[symbol]['step'] == 0 and (oi_condition_1m or price_condition_1m or volume_condition_1m):
-        stop_loss = current_price * 0.98  # 2% below the current price
-        risk = current_price - stop_loss
-        take_profit = current_price + (2 * risk)
+# Example take-profit and stop-loss calculations
+def calculate_take_profit(current_price, reward_ratio=2):
+    return [
+        current_price + current_price * 0.02 * i for i in range(1, 4)
+    ]
 
-        # Send initial reversal signal based on 1-minute data (Step 1)
-        signal_message = (
-            f"STEP 1: INITIAL REVERSAL SPOTTED (1m Data)!\n\n"
-            f"PAIR: {symbol}\n"
-            f"Price: ${current_price:.2f}\n"
-            f"Stop Loss: ${stop_loss:.2f}\n"
-            f"TP1: ${take_profit:.2f}\n"
-            f"TP2: ${take_profit * 1.5:.2f}\n"
-            f"TP3: ${take_profit * 2:.2f}\n"
-        )
+def calculate_stop_loss(current_price):
+    return current_price * 0.98
 
-        signal_status[symbol]['step'] = 1  # Move to step 1
-        signal_status[symbol]['last_signal_time'] = time.time()  # Update the time of the last signal
-        return signal_message
-    
-    # Step 2: Confirm after 5-15 minutes
-    elif signal_status[symbol]['step'] == 1:
-        time_since_last_signal = time.time() - signal_status[symbol]['last_signal_time']
-        
-        # Check if 5 to 15 minutes have passed
-        if 5 * 60 <= time_since_last_signal <= 15 * 60:
-            # Conditions for continuing reversal in 5-minute data
-            oi_condition_5m = oi_changes.get("5m") is not None and oi_changes["5m"] > 1.5
-            price_condition_5m = price_changes.get("5m") is not None and price_changes["5m"] > 1.3
-            volume_condition_5m = volume_changes.get("5m") is not None and volume_changes["5m"] > 12
+# Signal generation logic
+def generate_signal(pair, current_price, oi, price_change, volume_change, step):
+    if step == 1 and oi > THRESHOLDS['OI']['step1'] and price_change > THRESHOLDS['Price']['step1'] and volume_change > THRESHOLDS['Volume']['step1']:
+        stop_loss = calculate_stop_loss(current_price)
+        take_profit = calculate_take_profit(current_price)
+        logging.info(f"STEP 1: INITIAL REVERSAL SPOTTED (1m Data)!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nStop Loss: ${stop_loss:.2f}\nTP1: ${take_profit[0]:.2f}, TP2: ${take_profit[1]:.2f}, TP3: ${take_profit[2]:.2f}")
+        return True
+    elif step == 2 and oi > THRESHOLDS['OI']['step2'] and price_change > THRESHOLDS['Price']['step2'] and volume_change > THRESHOLDS['Volume']['step2']:
+        logging.info(f"STEP 2: TREND CONFIRMED AFTER 5-15 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend sustains. Consider re-entry or adjusting positions.")
+        return True
+    elif step == 3 and oi > THRESHOLDS['OI']['step3'] and price_change > THRESHOLDS['Price']['step3'] and volume_change > THRESHOLDS['Volume']['step3']:
+        logging.info(f"STEP 3: TREND CONFIRMED AFTER 15-60 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend continues. Strong signals of a lasting reversal.")
+        return True
+    elif step == 4 and oi > THRESHOLDS['OI']['step4'] and price_change > THRESHOLDS['Price']['step4'] and volume_change > THRESHOLDS['Volume']['step4']:
+        logging.info(f"STEP 4: TREND SUSTAINED FOR 1 HOUR!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nThe reversal has held for 1 hour. Strong trend continuation likely.")
+        return True
+    else:
+        return False
 
-            if oi_condition_5m and (price_condition_5m or volume_condition_5m):
-                # Send confirmation signal (Step 2)
-                signal_message = (
-                    f"STEP 2: TREND CONFIRMED AFTER 5-15 MINUTES!\n\n"
-                    f"PAIR: {symbol}\n"
-                    f"Price: ${current_price:.2f}\n"
-                    f"Trend sustains. Consider re-entry or adjusting positions."
-                )
-                signal_status[symbol]['step'] = 2  # Move to step 2
-                signal_status[symbol]['last_signal_time'] = time.time()  # Update time
-                return signal_message
+def monitor_pairs():
+    # Define pairs to monitor
+    pairs = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+
+    # Simulate monitoring loop
+    while True:
+        for pair in pairs:
+            logging.info(f"Fetching OI and price data for {pair}.")
+
+            # Simulated data fetch (replace with actual API calls)
+            current_price = 30000  # Replace with actual price from API
+            oi_5m = 1.2  # Replace with actual OI for 5 minutes
+            price_change_5m = 0.6  # Replace with actual price change for 5 minutes
+            volume_change_5m = 6.0  # Replace with actual volume change for 5 minutes
+
+            oi_15m = 1.8  # Replace with actual OI for 15 minutes
+            price_change_15m = 1.4  # Replace with actual price change for 15 minutes
+            volume_change_15m = 14.0  # Replace with actual volume change for 15 minutes
+
+            oi_1h = 2.2  # Replace with actual OI for 1 hour
+            price_change_1h = 1.6  # Replace with actual price change for 1 hour
+            volume_change_1h = 16.0  # Replace with actual volume change for 1 hour
+
+            # Step 1: Check for initial reversal (1-minute data simulated by 5-minute data here)
+            if generate_signal(pair, current_price, oi_5m, price_change_5m, volume_change_5m, step=1):
+                time.sleep(600)  # Sleep for 10 minutes (600 seconds)
+
+                # Step 2: Confirm trend continuation (5-15 minute data)
+                if generate_signal(pair, current_price, oi_15m, price_change_15m, volume_change_15m, step=2):
+                    time.sleep(1200)  # Sleep for another 20 minutes (total 30 minutes)
+
+                    # Step 3: Confirm trend (15-60 minute data)
+                    if generate_signal(pair, current_price, oi_15m, price_change_15m, volume_change_15m, step=3):
+                        time.sleep(1800)  # Sleep for another 30 minutes (total 60 minutes)
+
+                        # Step 4: Confirm sustained trend (1 hour data)
+                        generate_signal(pair, current_price, oi_1h, price_change_1h, volume_change_1h, step=4)
             else:
-                # Reset signal tracking if the trend weakens
-                signal_message = (
-                    f"STEP 2: TREND WEAKENED!\n\n"
-                    f"PAIR: {symbol}\n"
-                    f"Price: ${current_price:.2f}\n"
-                    f"Trend failed to confirm within 5-15 minutes. Reversal invalidated."
-                )
-                signal_status[symbol]['step'] = 0  # Reset to initial state
-                return signal_message
+                logging.info(f"No signal generated for {pair}. Monitoring OI, price, and volume changes.")
 
-    # Additional steps (Step 3, Step 4) can follow the same pattern as Step 2...
-
-    logging.info(f"No signal generated for {symbol}. Monitoring OI, price, and volume changes.")
-    return None
+            # Simulating a pause between pair checks
+            time.sleep(60)
