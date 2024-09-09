@@ -2,6 +2,7 @@ import time
 import requests
 import os
 import logging
+import numpy as np  # Importing NumPy for RSI calculation
 from collections import deque
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -21,12 +22,21 @@ if not TELEGRAM_BOT_TOKEN:
 SYMBOLS = ['HFTUSDT', 'XVSUSDT', 'LSKUSDT', 'ONGUSDT', 'BNTUSDT', 'BTCDOMUSDT', 'MTLUSDT', 'ORBSUSDT', 'ARKUSDT', 'TIAUSDC', 'ICXUSDT', 'ONEUSDT', 'AGLDUSDT', 'TWTUSDT']
 
 
-# Price and volume history to track changes over time intervals
+# Price, volume, and RSI history to track changes over time intervals
 price_history = {
     symbol: deque(maxlen=60) for symbol in SYMBOLS  # Store up to 60 prices (one price per minute)
 }
 volume_history = {
     symbol: deque(maxlen=60) for symbol in SYMBOLS  # Store up to 60 volume data points (one volume per minute)
+}
+rsi_history = {
+    symbol: {
+        "1m": deque(maxlen=60),
+        "5m": deque(maxlen=60),
+        "15m": deque(maxlen=60),
+        "1h": deque(maxlen=60),
+        "24h": deque(maxlen=60)
+    } for symbol in SYMBOLS
 }
 
 # Initialize FastAPI app
@@ -178,10 +188,44 @@ def calculate_change_with_emoji(change_value):
     else:
         return "⬜0.000%"
 
+# Function to calculate RSI
+def calculate_rsi(prices, period=14):
+    if len(prices) < period:
+        return None  # Not enough data points
+
+    deltas = np.diff(prices)  # Calculate price changes
+    seed = deltas[:period]  # Get the first 'period' number of changes
+    up = seed[seed >= 0].sum() / period  # Average gain
+    down = -seed[seed < 0].sum() / period  # Average loss
+
+    if down == 0:
+        rs = np.inf
+    else:
+        rs = up / down  # Relative strength
+
+    rsi = 100 - (100 / (1 + rs))
+
+    # Now calculate the rest of the RSI values using exponential moving average
+    for delta in deltas[period:]:
+        if delta > 0:
+            upval = delta
+            downval = 0
+        else:
+            upval = 0
+            downval = -delta
+
+        up = (up * (period - 1) + upval) / period
+        down = (down * (period - 1) + downval) / period
+
+        rs = up / down if down != 0 else np.inf
+        rsi = 100 - (100 / (1 + rs))
+
+    return rsi
+
 # Dictionary to store signal statuses per symbol
 signal_status = {}
 
-def generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes):
+def generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes, rsi_changes):
     global signal_status
     
     # Initialize signal status for the symbol if not already present
@@ -195,14 +239,16 @@ def generate_signal(symbol, current_price, oi_changes, price_changes, volume_cha
     logging.debug(f"OI Changes for {symbol}: {oi_changes}")
     logging.debug(f"Price Changes for {symbol}: {price_changes}")
     logging.debug(f"Volume Changes for {symbol}: {volume_changes}")
+    logging.debug(f"RSI Changes for {symbol}: {rsi_changes}")
     
     # Conditions for the initial reversal based on 1-minute data (Step 1)
     oi_condition_1m = oi_changes.get("1m") is not None and oi_changes["1m"] > 1.0
     price_condition_1m = price_changes.get("1m") is not None and price_changes["1m"] > 0.5
     volume_condition_1m = volume_changes.get("1m") is not None and volume_changes["1m"] > 5.0
+    rsi_condition_1m = rsi_changes.get("1m") is not None and rsi_changes["1m"] < 30  # Example RSI condition for oversold
 
     # Initial reversal signal (Step 1)
-    if signal_status[symbol]['step'] == 0 and (oi_condition_1m or price_condition_1m or volume_condition_1m):
+    if signal_status[symbol]['step'] == 0 and (oi_condition_1m or price_condition_1m or volume_condition_1m or rsi_condition_1m):
         stop_loss = current_price * 0.98  # 2% below the current price
         risk = current_price - stop_loss
         take_profit = current_price + (2 * risk)
@@ -232,8 +278,9 @@ def generate_signal(symbol, current_price, oi_changes, price_changes, volume_cha
             oi_condition_5m = oi_changes.get("5m") is not None and oi_changes["5m"] > 1.5
             price_condition_5m = price_changes.get("5m") is not None and price_changes["5m"] > 1.3
             volume_condition_5m = volume_changes.get("5m") is not None and volume_changes["5m"] > 12
+            rsi_condition_5m = rsi_changes.get("5m") is not None and rsi_changes["5m"] < 30  # Example RSI condition
 
-            if oi_condition_5m and (price_condition_5m or volume_condition_5m):
+            if oi_condition_5m and (price_condition_5m or volume_condition_5m or rsi_condition_5m):
                 # Send confirmation signal (Step 2)
                 signal_message = (
                     f"STEP 2: TREND CONFIRMED AFTER 5-15 MINUTES!\n\n"
@@ -265,8 +312,9 @@ def generate_signal(symbol, current_price, oi_changes, price_changes, volume_cha
             oi_condition_15m = oi_changes.get("15m") is not None and oi_changes["15m"] > 1.5
             price_condition_15m = price_changes.get("15m") is not None and price_changes["15m"] > 1.3
             volume_condition_15m = volume_changes.get("15m") is not None and volume_changes["15m"] > 12
+            rsi_condition_15m = rsi_changes.get("15m") is not None and rsi_changes["15m"] < 30  # Example RSI condition
 
-            if oi_condition_15m and (price_condition_15m or volume_condition_15m):
+            if oi_condition_15m and (price_condition_15m or volume_condition_15m or rsi_condition_15m):
                 # Send confirmation signal (Step 3)
                 signal_message = (
                     f"STEP 3: TREND CONFIRMED AFTER 15-60 MINUTES!\n\n"
@@ -298,8 +346,9 @@ def generate_signal(symbol, current_price, oi_changes, price_changes, volume_cha
             oi_condition_1h = oi_changes.get("1h") is not None and oi_changes["1h"] > 1.5
             price_condition_1h = price_changes.get("1h") is not None and price_changes["1h"] > 1.3
             volume_condition_1h = volume_changes.get("1h") is not None and volume_changes["1h"] > 12
+            rsi_condition_1h = rsi_changes.get("1h") is not None and rsi_changes["1h"] < 30  # Example RSI condition
 
-            if oi_condition_1h and (price_condition_1h or volume_condition_1h):
+            if oi_condition_1h and (price_condition_1h or volume_condition_1h or rsi_condition_1h):
                 # Send final confirmation signal (Step 4)
                 signal_message = (
                     f"STEP 4: TREND SUSTAINED FOR 1 HOUR!\n\n"
@@ -321,9 +370,8 @@ def generate_signal(symbol, current_price, oi_changes, price_changes, volume_cha
                 return signal_message
     
     # No signal generated at this point
-    logging.info(f"No signal generated for {symbol}. Monitoring OI, price, and volume changes.")
+    logging.info(f"No signal generated for {symbol}. Monitoring OI, price, volume, and RSI changes.")
     return None
-
 
 
 # Function to monitor pairs and check for signal generation
@@ -356,13 +404,28 @@ def monitor_pairs():
         volume_change_15m = ((current_volume - volume_history[symbol][-15]) / volume_history[symbol][-15]) * 100 if len(volume_history[symbol]) >= 15 else None
         volume_change_1h = ((current_volume - volume_history[symbol][-60]) / volume_history[symbol][-60]) * 100 if len(volume_history[symbol]) >= 60 else None
 
-        # Create dictionaries of OI, price, and volume changes for the symbol
+        # Calculate RSI for 1m, 5m, 15m, 1h, and 24h based on price history
+        rsi_1m = calculate_rsi(list(price_history[symbol])[-2:], period=14) if len(price_history[symbol]) >= 2 else None
+        rsi_5m = calculate_rsi(list(price_history[symbol])[-5:], period=14) if len(price_history[symbol]) >= 5 else None
+        rsi_15m = calculate_rsi(list(price_history[symbol])[-15:], period=14) if len(price_history[symbol]) >= 15 else None
+        rsi_1h = calculate_rsi(list(price_history[symbol])[-60:], period=14) if len(price_history[symbol]) >= 60 else None
+        rsi_24h = price_data.get('price_change_24h', None)  # Placeholder as you need continuous data for 24h
+
+        # Append the RSI values to rsi_history deques
+        rsi_history[symbol]['1m'].append(rsi_1m)
+        rsi_history[symbol]['5m'].append(rsi_5m)
+        rsi_history[symbol]['15m'].append(rsi_15m)
+        rsi_history[symbol]['1h'].append(rsi_1h)
+        rsi_history[symbol]['24h'].append(rsi_24h)
+
+        # Create dictionaries of OI, price, volume, and RSI changes for the symbol
         oi_changes = {"1m": oi_5m, "5m": oi_5m, "15m": oi_15m, "1h": oi_1h, "24h": oi_24h}
         price_changes = {"1m": price_change_1m, "5m": price_change_5m, "15m": price_change_15m, "1h": price_change_1h, "24h": price_change_24h}
         volume_changes = {"1m": volume_change_1m, "5m": volume_change_5m, "15m": volume_change_15m, "1h": volume_change_1h}
+        rsi_changes = {"1m": rsi_1m, "5m": rsi_5m, "15m": rsi_15m, "1h": rsi_1h, "24h": rsi_24h}
 
         # Check if conditions for signal generation are met
-        signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes)
+        signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes, rsi_changes)
         
         # If a signal is generated, send it via Telegram
         if signal:
