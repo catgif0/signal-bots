@@ -17,34 +17,40 @@ def calculate_take_profit(current_price, reward_ratio=2):
 def calculate_stop_loss(current_price):
     return current_price * 0.98
 
+# Helper function to safely compare values, ignoring None values
+def safe_compare(value, threshold):
+    if value is None:
+        return False
+    return value > threshold
+
 # Signal generation logic
 def generate_signal(pair, current_price, oi_changes, price_changes, volume_changes):
-    if (oi_changes['1m'] > THRESHOLDS['OI']['step1'] and
-        price_changes['1m'] > THRESHOLDS['Price']['step1'] and
-        volume_changes['1m'] > THRESHOLDS['Volume']['step1']):
+    if (safe_compare(oi_changes['1m'], THRESHOLDS['OI']['step1']) and
+        safe_compare(price_changes['1m'], THRESHOLDS['Price']['step1']) and
+        safe_compare(volume_changes['1m'], THRESHOLDS['Volume']['step1'])):
         
         stop_loss = calculate_stop_loss(current_price)
         take_profit = calculate_take_profit(current_price)
         logging.info(f"STEP 1: INITIAL REVERSAL SPOTTED (1m Data)!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nStop Loss: ${stop_loss:.2f}\nTP1: ${take_profit[0]:.2f}, TP2: ${take_profit[1]:.2f}, TP3: ${take_profit[2]:.2f}")
         return True
 
-    elif (oi_changes['5m'] > THRESHOLDS['OI']['step2'] and
-          price_changes['5m'] > THRESHOLDS['Price']['step2'] and
-          volume_changes['5m'] > THRESHOLDS['Volume']['step2']):
+    elif (safe_compare(oi_changes['5m'], THRESHOLDS['OI']['step2']) and
+          safe_compare(price_changes['5m'], THRESHOLDS['Price']['step2']) and
+          safe_compare(volume_changes['5m'], THRESHOLDS['Volume']['step2'])):
         
         logging.info(f"STEP 2: TREND CONFIRMED AFTER 5-15 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend sustains. Consider re-entry or adjusting positions.")
         return True
 
-    elif (oi_changes['15m'] > THRESHOLDS['OI']['step3'] and
-          price_changes['15m'] > THRESHOLDS['Price']['step3'] and
-          volume_changes['15m'] > THRESHOLDS['Volume']['step3']):
+    elif (safe_compare(oi_changes['15m'], THRESHOLDS['OI']['step3']) and
+          safe_compare(price_changes['15m'], THRESHOLDS['Price']['step3']) and
+          safe_compare(volume_changes['15m'], THRESHOLDS['Volume']['step3'])):
         
         logging.info(f"STEP 3: TREND CONFIRMED AFTER 15-60 MINUTES!\nPAIR: {pair}\nPrice: ${current_price:.2f}\nTrend continues. Strong signals of a lasting reversal.")
         return True
 
-    elif (oi_changes['1h'] > THRESHOLDS['OI']['step4'] and
-          price_changes['1h'] > THRESHOLDS['Price']['step4'] and
-          volume_changes['1h'] > THRESHOLDS['Volume']['step4']):
+    elif (safe_compare(oi_changes['1h'], THRESHOLDS['OI']['step4']) and
+          safe_compare(price_changes['1h'], THRESHOLDS['Price']['step4']) and
+          safe_compare(volume_changes['1h'], THRESHOLDS['Volume']['step4'])):
         
         logging.info(f"STEP 4: TREND SUSTAINED FOR 1 HOUR!\nPAIR: {pair}\nPrice: ${current_price:.2f}")
         return True
