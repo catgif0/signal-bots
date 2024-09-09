@@ -1,6 +1,4 @@
 import time
-import requests
-import os
 import logging
 from collections import deque
 from services.signal_generation import generate_signal
@@ -8,10 +6,11 @@ from services.telegram import send_telegram_message
 from services.binance_api import get_open_interest_change, get_price_data, get_volume
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Symbols to monitor
-SYMBOLS = ['HFTUSDT', 'XVSUSDT', 'LSKUSDT', 'ONGUSDT', 'BNTUSDT', 'BTCDOMUSDT', 'MTLUSDT', 'ORBSUSDT', 'ARKUSDT', 'TIAUSDC', 'ICXUSDT', 'ONEUSDT', 'AGLDUSDT', 'TWTUSDT']
+SYMBOLS = ['HFTUSDT', 'XVSUSDT', 'LSKUSDT', 'ONGUSDT', 'BNTUSDT', 'BTCDOMUSDT', 'MTLUSDT', 
+           'ORBSUSDT', 'ARKUSDT', 'TIAUSDC', 'ICXUSDT', 'ONEUSDT', 'AGLDUSDT', 'TWTUSDT']
 
 # Price and volume history to track changes over time intervals
 price_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
@@ -20,70 +19,59 @@ volume_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 # Function to monitor pairs and check for signal generation
 def monitor_pairs():
     logging.info("Monitoring started for all symbols.")
+    
     for symbol in SYMBOLS:
         try:
-            logging.info(f"Fetching OI and price data for {symbol}.")
-
-            # Fetch OI changes and price changes from your existing logic
+            logging.info(f"Fetching OI, price, and volume data for {symbol}.")
+            
+            # Fetch OI changes
             oi_5m = get_open_interest_change(symbol, '5m')
             oi_15m = get_open_interest_change(symbol, '15m')
             oi_1h = get_open_interest_change(symbol, '1h')
             oi_24h = get_open_interest_change(symbol, '1d')
 
-            logging.debug(f"OI Data for {symbol}: 5m={oi_5m}, 15m={oi_15m}, 1h={oi_1h}, 1d={oi_24h}")
-
+            # Fetch price data
             price_data = get_price_data(symbol)
             current_price = price_data.get("price", None)
-
-            if current_price is None:
-                logging.error(f"Error fetching price data for {symbol}. Skipping this symbol.")
-                continue
-
-            logging.debug(f"Current price for {symbol}: {current_price}")
-
-            # Append current price and volume to history
+            price_change_24h = price_data.get("price_change_24h", None)
+            
+            # Append current price to history
             price_history[symbol].append(current_price)
 
-            # Ensure enough historical data is present in deque before calculating changes
+            # Fetch volume data
+            current_volume = get_volume(symbol)
+            volume_history[symbol].append(current_volume)
+
+            # Calculate price and volume changes (with safe fallback to None)
             price_change_1m = ((current_price - price_history[symbol][-2]) / price_history[symbol][-2]) * 100 if len(price_history[symbol]) >= 2 else None
             price_change_5m = ((current_price - price_history[symbol][-5]) / price_history[symbol][-5]) * 100 if len(price_history[symbol]) >= 5 else None
             price_change_15m = ((current_price - price_history[symbol][-15]) / price_history[symbol][-15]) * 100 if len(price_history[symbol]) >= 15 else None
             price_change_1h = ((current_price - price_history[symbol][-60]) / price_history[symbol][-60]) * 100 if len(price_history[symbol]) >= 60 else None
-            price_change_24h = price_data.get("price_change_24h", None)
 
-            logging.debug(f"Price changes for {symbol}: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
-
-            # Fetch volume changes
-            current_volume = get_volume(symbol)
-            if current_volume is None:
-                logging.error(f"Error fetching volume data for {symbol}. Skipping this symbol.")
-                continue
-
-            volume_history[symbol].append(current_volume)
             volume_change_1m = ((current_volume - volume_history[symbol][-2]) / volume_history[symbol][-2]) * 100 if len(volume_history[symbol]) >= 2 else None
             volume_change_5m = ((current_volume - volume_history[symbol][-5]) / volume_history[symbol][-5]) * 100 if len(volume_history[symbol]) >= 5 else None
             volume_change_15m = ((current_volume - volume_history[symbol][-15]) / volume_history[symbol][-15]) * 100 if len(volume_history[symbol]) >= 15 else None
             volume_change_1h = ((current_volume - volume_history[symbol][-60]) / volume_history[symbol][-60]) * 100 if len(volume_history[symbol]) >= 60 else None
+            
+            # Log all fetched data
+            logging.info(f"Symbol: {symbol}, Current Price: {current_price}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
+            logging.info(f"Price Changes: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
+            logging.info(f"Volume Changes: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
 
-            logging.debug(f"Volume changes for {symbol}: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
-
-            # Create dictionaries of OI, price, and volume changes for the symbol
+            # Check if conditions for signal generation are met
             oi_changes = {"1m": oi_5m, "5m": oi_5m, "15m": oi_15m, "1h": oi_1h, "24h": oi_24h}
             price_changes = {"1m": price_change_1m, "5m": price_change_5m, "15m": price_change_15m, "1h": price_change_1h, "24h": price_change_24h}
             volume_changes = {"1m": volume_change_1m, "5m": volume_change_5m, "15m": volume_change_15m, "1h": volume_change_1h}
-
-            logging.debug(f"Generated changes for {symbol}: OI={oi_changes}, Price={price_changes}, Volume={volume_changes}")
-
-            # Check if conditions for signal generation are met
+            
             signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes)
 
-            # If a signal is generated, send it via Telegram
+            # Log whether a signal was generated
             if signal:
                 logging.info(f"Signal generated for {symbol}: {signal}")
                 send_telegram_message(signal)
             else:
                 logging.info(f"No signal generated for {symbol} during this iteration.")
-
+        
         except Exception as e:
             logging.error(f"Error while processing {symbol}: {e}")
 
