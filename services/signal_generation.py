@@ -1,17 +1,20 @@
-import logging
-from services.utils import calculate_rsi
+def generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes, rsi_changes):
+    # Check if there is enough historical data to calculate changes
+    price_change_1m = ((current_price - price_changes[-2]) / price_changes[-2]) * 100 if len(price_changes) >= 2 else None
+    price_change_5m = ((current_price - price_changes[-5]) / price_changes[-5]) * 100 if len(price_changes) >= 5 else None
+    price_change_15m = ((current_price - price_changes[-15]) / price_changes[-15]) * 100 if len(price_changes) >= 15 else None
+    price_change_1h = ((current_price - price_changes[-60]) / price_changes[-60]) * 100 if len(price_changes) >= 60 else None
 
-def generate_signal(symbol, current_price, oi_changes, price_history, volume_history, rsi_history):
-    logging.debug(f"Generating signal for {symbol}")
+    # Similar handling for volume history
+    volume_change_1m = ((current_volume - volume_changes[-2]) / volume_changes[-2]) * 100 if len(volume_changes) >= 2 else None
+    volume_change_5m = ((current_volume - volume_changes[-5]) / volume_changes[-5]) * 100 if len(volume_changes) >= 5 else None
+    volume_change_15m = ((current_volume - volume_changes[-15]) / volume_changes[-15]) * 100 if len(volume_changes) >= 15 else None
+    volume_change_1h = ((current_volume - volume_changes[-60]) / volume_changes[-60]) * 100 if len(volume_changes) >= 60 else None
 
-    price_change_1m = ((current_price - price_history[-2]) / price_history[-2]) * 100 if len(price_history) >= 2 else None
-    volume_change_1m = ((volume_history[-1] - volume_history[-2]) / volume_history[-2]) * 100 if len(volume_history) >= 2 else None
-    
-    rsi_1m = calculate_rsi(list(price_history), period=14)
-    
-    # Example signal conditions
-    if oi_changes['1m'] > 1 and rsi_1m < 30:
-        message = f"Reversal spotted for {symbol}! Price: {current_price:.2f}, OI: {oi_changes['1m']:.2f}, RSI: {rsi_1m:.2f}"
-        return message
-    
-    return None
+    # Ensure your calculations only run if there is enough data.
+    # Generate signal based on calculated values
+    signal = None
+    if price_change_1m or price_change_5m or price_change_15m or price_change_1h:
+        signal = f"Signal for {symbol}: Price change 1m: {price_change_1m}%, 5m: {price_change_5m}%, 15m: {price_change_15m}%, 1h: {price_change_1h}%"
+
+    return signal
