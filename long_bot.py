@@ -38,6 +38,9 @@ def monitor_pairs():
             # Append current price to history
             price_history[symbol].append(current_price)
 
+            # Format current price to four decimal places
+            formatted_price = f"{current_price:.4f}" if current_price is not None else "N/A"
+
             # Fetch volume data
             current_volume = get_volume(symbol)
             volume_history[symbol].append(current_volume)
@@ -54,7 +57,7 @@ def monitor_pairs():
             volume_change_1h = ((current_volume - volume_history[symbol][-60]) / volume_history[symbol][-60]) * 100 if len(volume_history[symbol]) >= 60 else None
             
             # Log all fetched data
-            logging.info(f"Symbol: {symbol}, Current Price: {current_price}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
+            logging.info(f"Symbol: {symbol}, Current Price: {formatted_price}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
             logging.info(f"Price Changes: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
             logging.info(f"Volume Changes: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
 
