@@ -28,6 +28,8 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     """
 
     # ---------- Track new lows and volume ----------
+    logging.info(f"Checking lows for {pair}. Current price: {current_price}, Time: {current_time}")
+
     if len(price_data) >= 2:
         if not recent_lows or current_price < min([low['price'] for low in recent_lows]):
             recent_lows.append({
@@ -37,9 +39,9 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
             })
             logging.info(f"New low identified for {pair}: Price: {current_price}, Volume: {volume_data[-1]}")
 
-    # Log details of the three lows if available
-    if len(recent_lows) == 3:
-        logging.info(f"Three recent lows for {pair}:")
+    # Log details of the recent lows every time, even if a signal is not generated
+    if len(recent_lows) > 0:
+        logging.info(f"Recent lows for {pair}:")
         for idx, low in enumerate(recent_lows, 1):
             logging.info(f"Low {idx}: Price: {low['price']}, Volume: {low['volume']}, Time: {low['time']}")
 
