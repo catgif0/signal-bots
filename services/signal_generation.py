@@ -12,9 +12,7 @@ THRESHOLDS = {
 
 # Example take-profit and stop-loss calculations
 def calculate_take_profit(current_price, reward_ratio=2):
-    return [
-        current_price + current_price * 0.02 * i for i in range(1, 4)
-    ]
+    return [current_price + current_price * 0.02 * i for i in range(1, 4)]
 
 def calculate_stop_loss(current_price):
     return current_price * 0.98
@@ -34,18 +32,18 @@ def generate_signal(pair, current_price, oi_changes, price_changes, volume_chang
     Returns:
     bool: True if signal is generated, False otherwise
     """
-
+    
     # Condition 1: 1m OI change must be positive and above the threshold
-    if oi_changes['1m'] > THRESHOLDS['OI']['1m']:
+    if oi_changes['1m'] is not None and oi_changes['1m'] > THRESHOLDS['OI']['1m']:
         
         # Condition 2: All other OI changes (5m, 15m, 1h, 24h) must be negative
-        if all(oi_changes[tf] < 0 for tf in ['5m', '15m', '1h', '24h']):
+        if all(oi_changes.get(tf, 0) < 0 for tf in ['5m', '15m', '1h', '24h']):
             
             # Condition 3: Price change must be more than 1% in the last minute
-            if price_changes['1m'] > THRESHOLDS['Price']['1m']:
+            if price_changes['1m'] is not None and price_changes['1m'] > THRESHOLDS['Price']['1m']:
                 
                 # Condition 4: Volume change must be more than 20% in the last minute
-                if volume_changes['1m'] > THRESHOLDS['Volume']['1m']:
+                if volume_changes['1m'] is not None and volume_changes['1m'] > THRESHOLDS['Volume']['1m']:
                     
                     # Generate signal
                     stop_loss = calculate_stop_loss(current_price)
