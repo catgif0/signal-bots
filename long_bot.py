@@ -1,7 +1,8 @@
 import time
 import logging
 from collections import deque
-from services.signal_generation import generate_signal
+from services.signal_generation import generate_signal  # Existing signal logic
+from services.new_signal_generation import generate_new_signal  # New signal logic
 from services.telegram import send_telegram_message
 from services.binance_api import get_open_interest_change, get_price_data, get_volume
 
@@ -83,19 +84,24 @@ def monitor_pairs():
             logging.info(f"Price Changes: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
             logging.info(f"Volume Changes: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
 
-            # Check if conditions for signal generation are met
+            # Check if conditions for original signal generation are met
             oi_changes = {"1m": oi_1m_change, "5m": oi_5m, "15m": oi_15m, "1h": oi_1h, "24h": oi_24h}
             price_changes = {"1m": price_change_1m, "5m": price_change_5m, "15m": price_change_15m, "1h": price_change_1h, "24h": price_change_24h}
             volume_changes = {"1m": volume_change_1m, "5m": volume_change_5m, "15m": volume_change_15m, "1h": volume_change_1h}
             
+            # Call original signal generation logic
             signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes)
 
-            # Log whether a signal was generated
+            # Call the new signal generation logic
+            new_signal = generate_new_signal(symbol, current_price, price_history[symbol], volume_history[symbol], time.time())
+
+            # Log whether a signal was generated from either logic
             if signal:
                 logging.info(f"Signal generated for {symbol}: {signal}")
                 send_telegram_message(signal)
-            else:
-                logging.info(f"No signal generated for {symbol} during this iteration.")
+            if new_signal:
+                logging.info(f"New Signal generated for {symbol}: {new_signal}")
+                send_telegram_message(new_signal)
         
         except Exception as e:
             logging.error(f"Error while processing {symbol}: {e}")
