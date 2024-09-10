@@ -35,15 +35,18 @@ def monitor_pairs():
             logging.info(f"Fetching OI, price, and volume data for {symbol}.")
             
             # Fetch OI changes for different intervals
-            oi_1m = get_open_interest_change(symbol, '1m')
+            oi_current = get_open_interest_change(symbol, '5m')  # Assuming OI for 5m is the smallest interval available
             oi_5m = get_open_interest_change(symbol, '5m')
             oi_15m = get_open_interest_change(symbol, '15m')
             oi_1h = get_open_interest_change(symbol, '1h')
             oi_24h = get_open_interest_change(symbol, '1d')
 
-            # Append the current OI to history and calculate the 1m OI change safely
-            oi_history[symbol].append(oi_1m)
-            oi_1m_change = safe_calculate(oi_1m, oi_history[symbol][-2]) if len(oi_history[symbol]) >= 2 else None
+            # Append the current OI to history and calculate the 1m OI change dynamically
+            oi_history[symbol].append(oi_current)
+            if len(oi_history[symbol]) >= 2:
+                oi_1m_change = safe_calculate(oi_history[symbol][-1], oi_history[symbol][-2])
+            else:
+                oi_1m_change = None
 
             # Fetch price data
             price_data = get_price_data(symbol)
@@ -76,7 +79,7 @@ def monitor_pairs():
             volume_change_1h = safe_calculate(current_volume, volume_history[symbol][-60]) if len(volume_history[symbol]) >= 60 else None
             
             # Log all fetched data
-            logging.info(f"Symbol: {symbol}, Current Price: {formatted_price}, OI 1m: {oi_1m_change}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
+            logging.info(f"Symbol: {symbol}, Current Price: {formatted_price}, OI 1m Change: {oi_1m_change}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
             logging.info(f"Price Changes: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
             logging.info(f"Volume Changes: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
 
