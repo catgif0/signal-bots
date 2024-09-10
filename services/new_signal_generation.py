@@ -27,17 +27,17 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     str: Signal message if generated, else False
     """
 
-    # ---------- Track new lows and volume ----------
     logging.info(f"Checking lows for {pair}. Current price: {current_price}, Time: {current_time}")
 
     if len(price_data) >= 2:
         if not recent_lows or current_price < min([low['price'] for low in recent_lows]):
+            # Log current low before appending
+            logging.info(f"Adding new low for {pair}. Price: {current_price}, Volume: {volume_data[-1]}")
             recent_lows.append({
                 'price': current_price,
                 'volume': volume_data[-1],
                 'time': current_time
             })
-            logging.info(f"New low identified for {pair}: Price: {current_price}, Volume: {volume_data[-1]}")
 
     # Log details of the recent lows every time, even if a signal is not generated
     if len(recent_lows) > 0:
@@ -49,6 +49,7 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     if len(recent_lows) == 3:
         volumes = [low['volume'] for low in recent_lows]
         avg_volume = sum(volume_data) / len(volume_data) if len(volume_data) > 0 else 1  # Avoid division by zero
+        logging.info(f"Average volume for {pair}: {avg_volume}, Volumes at lows: {volumes}")
         if all(v > avg_volume * HIGH_VOLUME_THRESHOLD for v in volumes) and volumes[0] > volumes[1] > volumes[2]:
             signal_message = (
                 f"⚠️ NEW LOW DETECTED - 3rd Low!\n\n"
