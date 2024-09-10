@@ -17,6 +17,15 @@ price_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 volume_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 oi_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 
+# Function to check if data is None before proceeding with calculations
+def safe_calculate(change, old_value):
+    if change is None or old_value is None:
+        return None
+    try:
+        return (change - old_value) / old_value * 100
+    except (ZeroDivisionError, TypeError):
+        return None
+
 # Function to monitor pairs and check for signal generation
 def monitor_pairs():
     logging.info("Monitoring started for all symbols.")
@@ -34,12 +43,13 @@ def monitor_pairs():
             # Fetch current OI value and calculate OI 1m change
             current_oi = get_open_interest_change(symbol, '1m')
             oi_history[symbol].append(current_oi)
-            oi_1m = ((current_oi - oi_history[symbol][-2]) / oi_history[symbol][-2]) * 100 if len(oi_history[symbol]) >= 2 and oi_history[symbol][-2] is not None else None
+            oi_1m = safe_calculate(current_oi, oi_history[symbol][-2]) if len(oi_history[symbol]) >= 2 else None
 
             # Fetch price data
             price_data = get_price_data(symbol)
             current_price = price_data.get("price", None)
             price_change_24h = price_data.get("price_change_24h", None)
+            
             if current_price is None:
                 logging.warning(f"Price data for {symbol} is None, skipping.")
                 continue
@@ -54,15 +64,15 @@ def monitor_pairs():
             volume_history[symbol].append(current_volume)
 
             # Calculate price and volume changes
-            price_change_1m = ((current_price - price_history[symbol][-2]) / price_history[symbol][-2]) * 100 if len(price_history[symbol]) >= 2 and price_history[symbol][-2] is not None else None
-            price_change_5m = ((current_price - price_history[symbol][-5]) / price_history[symbol][-5]) * 100 if len(price_history[symbol]) >= 5 and price_history[symbol][-5] is not None else None
-            price_change_15m = ((current_price - price_history[symbol][-15]) / price_history[symbol][-15]) * 100 if len(price_history[symbol]) >= 15 and price_history[symbol][-15] is not None else None
-            price_change_1h = ((current_price - price_history[symbol][-60]) / price_history[symbol][-60]) * 100 if len(price_history[symbol]) >= 60 and price_history[symbol][-60] is not None else None
+            price_change_1m = safe_calculate(current_price, price_history[symbol][-2]) if len(price_history[symbol]) >= 2 else None
+            price_change_5m = safe_calculate(current_price, price_history[symbol][-5]) if len(price_history[symbol]) >= 5 else None
+            price_change_15m = safe_calculate(current_price, price_history[symbol][-15]) if len(price_history[symbol]) >= 15 else None
+            price_change_1h = safe_calculate(current_price, price_history[symbol][-60]) if len(price_history[symbol]) >= 60 else None
 
-            volume_change_1m = ((current_volume - volume_history[symbol][-2]) / volume_history[symbol][-2]) * 100 if len(volume_history[symbol]) >= 2 and volume_history[symbol][-2] is not None else None
-            volume_change_5m = ((current_volume - volume_history[symbol][-5]) / volume_history[symbol][-5]) * 100 if len(volume_history[symbol]) >= 5 and volume_history[symbol][-5] is not None else None
-            volume_change_15m = ((current_volume - volume_history[symbol][-15]) / volume_history[symbol][-15]) * 100 if len(volume_history[symbol]) >= 15 and volume_history[symbol][-15] is not None else None
-            volume_change_1h = ((current_volume - volume_history[symbol][-60]) / volume_history[symbol][-60]) * 100 if len(volume_history[symbol]) >= 60 and volume_history[symbol][-60] is not None else None
+            volume_change_1m = safe_calculate(current_volume, volume_history[symbol][-2]) if len(volume_history[symbol]) >= 2 else None
+            volume_change_5m = safe_calculate(current_volume, volume_history[symbol][-5]) if len(volume_history[symbol]) >= 5 else None
+            volume_change_15m = safe_calculate(current_volume, volume_history[symbol][-15]) if len(volume_history[symbol]) >= 15 else None
+            volume_change_1h = safe_calculate(current_volume, volume_history[symbol][-60]) if len(volume_history[symbol]) >= 60 else None
             
             # Log all fetched data
             logging.info(f"Symbol: {symbol}, Current Price: {formatted_price}, OI 1m: {oi_1m}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
