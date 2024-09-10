@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 # High volume threshold for new lows signal
 HIGH_VOLUME_THRESHOLD = 1.5  # 1.5x of the average volume
-recent_lows = deque(maxlen=3)  # Track up to 3 recent lows with volume
+recent_lows = {}  # Track up to 3 recent lows with volume for each symbol
 
 # New signal generation logic based on three lows and decreasing volume trend
 def generate_new_signal(pair, current_price, price_data, volume_data, current_time):
@@ -27,27 +27,30 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     str: Signal message if generated, else False
     """
 
+    if pair not in recent_lows:
+        recent_lows[pair] = deque(maxlen=3)
+
     logging.info(f"Checking lows for {pair}. Current price: {current_price}, Time: {current_time}")
 
     if len(price_data) >= 2:
-        if not recent_lows or current_price < min([low['price'] for low in recent_lows]):
+        if not recent_lows[pair] or current_price < min([low['price'] for low in recent_lows[pair]]):
             # Log current low before appending
             logging.info(f"Adding new low for {pair}. Price: {current_price}, Volume: {volume_data[-1]}")
-            recent_lows.append({
+            recent_lows[pair].append({
                 'price': current_price,
                 'volume': volume_data[-1],
                 'time': current_time
             })
 
     # Log details of the recent lows every time, even if a signal is not generated
-    if len(recent_lows) > 0:
+    if len(recent_lows[pair]) > 0:
         logging.info(f"Recent lows for {pair}:")
-        for idx, low in enumerate(recent_lows, 1):
+        for idx, low in enumerate(recent_lows[pair], 1):
             logging.info(f"Low {idx}: Price: {low['price']}, Volume: {low['volume']}, Time: {low['time']}")
 
     # Check if we have 3 new lows and decreasing volume trend
-    if len(recent_lows) == 3:
-        volumes = [low['volume'] for low in recent_lows]
+    if len(recent_lows[pair]) == 3:
+        volumes = [low['volume'] for low in recent_lows[pair]]
         avg_volume = sum(volume_data) / len(volume_data) if len(volume_data) > 0 else 1  # Avoid division by zero
         logging.info(f"Average volume for {pair}: {avg_volume}, Volumes at lows: {volumes}")
         if all(v > avg_volume * HIGH_VOLUME_THRESHOLD for v in volumes) and volumes[0] > volumes[1] > volumes[2]:
@@ -57,9 +60,9 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
                 f"Price: ${current_price:.4f}\n"
                 f"Time: {current_time}\n\n"
                 f"Previous Lows:\n"
-                f"- Low 1: ${recent_lows[0]['price']:.4f} (Volume: {recent_lows[0]['volume']})\n"
-                f"- Low 2: ${recent_lows[1]['price']:.4f} (Volume: {recent_lows[1]['volume']})\n"
-                f"- Low 3: ${recent_lows[2]['price']:.4f} (Volume: {recent_lows[2]['volume']})\n\n"
+                f"- Low 1: ${recent_lows[pair][0]['price']:.4f} (Volume: {recent_lows[pair][0]['volume']})\n"
+                f"- Low 2: ${recent_lows[pair][1]['price']:.4f} (Volume: {recent_lows[pair][1]['volume']})\n"
+                f"- Low 3: ${recent_lows[pair][2]['price']:.4f} (Volume: {recent_lows[pair][2]['volume']})\n\n"
                 f"Volume trend: Decreasing (High volumes but reducing at each low)\n"
             )
             logging.info(f"Signal Generated for {pair}: {signal_message}")
