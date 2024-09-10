@@ -88,7 +88,7 @@ def monitor_pairs():
             price_changes = {"1m": price_change_1m, "5m": price_change_5m, "15m": price_change_15m, "1h": price_change_1h, "24h": price_change_24h}
             volume_changes = {"1m": volume_change_1m, "5m": volume_change_5m, "15m": volume_change_15m, "1h": volume_change_1h}
             
-            signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes)
+            signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes, price_history[symbol], volume_history[symbol], time.time())
 
             # Log whether a signal was generated
             if signal:
