@@ -2,9 +2,10 @@ import time
 import logging
 from collections import deque
 from services.signal_generation import generate_signal  # Existing signal logic
-from services.new_signal_generation import generate_new_signal  # New signal logic
+from services.new_signal_generation import generate_new_signal  # New signal logic with RSI
 from services.telegram import send_telegram_message
 from services.binance_api import get_open_interest_change, get_price_data, get_volume
+from services.rsi_calculation import calculate_rsi  # Import RSI calculation function
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -114,6 +115,11 @@ def monitor_pairs():
             logging.info(f"Symbol: {symbol}, Current Price: {formatted_price}, OI 1m Change: {oi_1m_change}, OI 5m: {oi_5m}, OI 15m: {oi_15m}, OI 1h: {oi_1h}, OI 24h: {oi_24h}")
             logging.info(f"Price Changes: 1m={price_change_1m}, 5m={price_change_5m}, 15m={price_change_15m}, 1h={price_change_1h}, 24h={price_change_24h}")
             logging.info(f"Volume Changes: 1m={volume_change_1m}, 5m={volume_change_5m}, 15m={volume_change_15m}, 1h={volume_change_1h}")
+
+            # **NEW**: Calculate RSI based on price history (14-period RSI)
+            rsi = calculate_rsi(list(price_history[symbol])) if len(price_history[symbol]) >= 14 else None
+            if rsi is not None:
+                logging.info(f"RSI for {symbol}: {rsi:.2f}")
 
             # Check if conditions for original signal generation are met
             oi_changes = {"1m": oi_1m_change, "5m": oi_5m, "15m": oi_15m, "1h": oi_1h, "24h": oi_24h}
