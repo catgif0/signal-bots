@@ -70,9 +70,12 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
         # Volume condition: volumes should be greater than 1.5x average and decreasing
         volume_condition = all(v > avg_volume * HIGH_VOLUME_THRESHOLD for v in volumes) and volumes[0] > volumes[1] > volumes[2]
 
-        # RSI condition: all RSI values should be below 30 (oversold condition)
+        # RSI condition: RSI 3 should be higher than RSI 1 and RSI 2, but RSI 1 and RSI 2 must be between 1-40
+        # NEW: Updated logic to ensure RSI 3 is greater than RSI 1 and RSI 2, and RSI 1 and 2 must be between 1-40.
         rsis = [low['rsi'] for low in recent_lows[pair] if low['rsi'] is not None]
-        rsi_condition = all(rsi < 30 for rsi in rsis) if len(rsis) == 3 else False
+        rsi_condition = (
+            len(rsis) == 3 and 1 <= rsis[0] <= 40 and 1 <= rsis[1] <= 40 and rsis[2] > rsis[0] and rsis[2] > rsis[1]
+        )  # NEW: Ensures RSI3 is the highest, but RSI1 and RSI2 can be in any positive or negative ratio within 1-40.
 
         # Generate signal if either volume condition or RSI condition is satisfied
         if volume_condition or rsi_condition:
@@ -86,7 +89,7 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
                 f"- Low 2: ${recent_lows[pair][1]['price']:.4f} (Volume: {recent_lows[pair][1]['volume']}, RSI: {recent_lows[pair][1]['rsi']})\n"
                 f"- Low 3: ${recent_lows[pair][2]['price']:.4f} (Volume: {recent_lows[pair][2]['volume']}, RSI: {recent_lows[pair][2]['rsi']})\n\n"
                 f"Volume trend: {'Decreasing' if volume_condition else 'Not decreasing'}\n"
-                f"RSI trend: {'Oversold (RSI < 30)' if rsi_condition else 'No RSI signal'}\n"
+                f"RSI trend: {'RSI increasing and in range (1-40) with RSI3 > RSI1 & RSI2' if rsi_condition else 'No RSI signal'}\n"  # NEW: Updated RSI trend description.
             )
             logging.info(f"Signal Generated for {pair}: {signal_message}")
             return signal_message
