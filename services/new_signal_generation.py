@@ -28,26 +28,32 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     str: Signal message if generated, else False.
     """
 
+    # Initialize the recent_lows for the pair if it doesn't exist
     if pair not in recent_lows:
         recent_lows[pair] = deque(maxlen=3)
 
     logging.info(f"Checking lows for {pair}. Current price: {current_price}, Time: {current_time}")
 
+    # Ensure that we have at least 2 price points before comparing current price
     if len(price_data) >= 2:
         if not recent_lows[pair] or current_price < min([low['price'] for low in recent_lows[pair]]):
-            # Calculate RSI if enough data exists (at least 14 prices)
+            # Calculate RSI if we have at least 14 prices
             rsi = calculate_rsi(list(price_data)) if len(price_data) >= 14 else None
 
-            # Log current low, volume, and RSI before appending
-            logging.info(f"Adding new low for {pair}. Price: {current_price}, Volume: {volume_data[-1]}, RSI: {rsi}")
-            recent_lows[pair].append({
-                'price': current_price,
-                'volume': volume_data[-1],
-                'rsi': rsi,
-                'time': current_time
-            })
+            # Safeguard for volume data to avoid issues if any volumes are missing
+            current_volume = volume_data[-1] if len(volume_data) > 0 else None
 
-    # Log details of the recent lows every time, even if a signal is not generated
+            if current_volume is not None:
+                # Log current low, volume, and RSI before appending to recent_lows
+                logging.info(f"Adding new low for {pair}. Price: {current_price}, Volume: {current_volume}, RSI: {rsi}")
+                recent_lows[pair].append({
+                    'price': current_price,
+                    'volume': current_volume,
+                    'rsi': rsi,
+                    'time': current_time
+                })
+
+    # Log the details of the recent lows
     if len(recent_lows[pair]) > 0:
         logging.info(f"Recent lows for {pair}:")
         for idx, low in enumerate(recent_lows[pair], 1):
@@ -55,18 +61,20 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
 
     # Check if we have 3 new lows and either decreasing volume trend or oversold RSI
     if len(recent_lows[pair]) == 3:
-        # Check volume condition
+        # Extract volumes for the 3 lows
         volumes = [low['volume'] for low in recent_lows[pair]]
-        avg_volume = sum(volume_data) / len(volume_data) if len(volume_data) > 0 else 1  # Avoid division by zero
+        avg_volume = sum(volumes) / len(volumes) if len(volumes) > 0 else 1  # Prevent division by zero
+
         logging.info(f"Average volume for {pair}: {avg_volume}, Volumes at lows: {volumes}")
-        
+
+        # Volume condition: volumes should be greater than 1.5x average and decreasing
         volume_condition = all(v > avg_volume * HIGH_VOLUME_THRESHOLD for v in volumes) and volumes[0] > volumes[1] > volumes[2]
 
-        # Check RSI condition (e.g., RSI < 30 implies oversold)
+        # RSI condition: all RSI values should be below 30 (oversold condition)
         rsis = [low['rsi'] for low in recent_lows[pair] if low['rsi'] is not None]
         rsi_condition = all(rsi < 30 for rsi in rsis) if len(rsis) == 3 else False
 
-        # Signal is generated if either volume condition or RSI condition is true
+        # Generate signal if either volume condition or RSI condition is satisfied
         if volume_condition or rsi_condition:
             signal_message = (
                 f"⚠️ NEW LOW DETECTED - 3rd Low!\n\n"
