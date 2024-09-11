@@ -20,40 +20,49 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
     pair: str: The pair being analyzed (e.g., BTCUSDT)
     current_price: float: The current price of the asset
     price_data: deque: Price history data (deque)
-    volume_data: deque: Volume history data (deque)
-    current_time: datetime: Current time to track lows
+    volume_data: deque: Volume history data (deque, specifically 1-minute volumes)
+    current_time: float: Current time (as a Unix timestamp) to track lows
     
     Returns:
     str: Signal message if generated, else False
     """
 
+    # Initialize the low tracking deque for the pair if not present
     if pair not in recent_lows:
         recent_lows[pair] = deque(maxlen=3)
 
     logging.info(f"Checking lows for {pair}. Current price: {current_price}, Time: {current_time}")
 
+    # Only proceed if there is enough price history
     if len(price_data) >= 2:
+        # Check if the current price is a new low compared to the recent lows
         if not recent_lows[pair] or current_price < min([low['price'] for low in recent_lows[pair]]):
-            # Log current low before appending
+            # Log and append the new low with the corresponding volume (assumed to be 1-minute volume)
             logging.info(f"Adding new low for {pair}. Price: {current_price}, Volume: {volume_data[-1]}")
             recent_lows[pair].append({
                 'price': current_price,
-                'volume': volume_data[-1],
+                'volume': volume_data[-1],  # Using the latest 1-minute volume
                 'time': current_time
             })
 
-    # Log details of the recent lows every time, even if a signal is not generated
+    # Log the recent lows for debugging purposes
     if len(recent_lows[pair]) > 0:
         logging.info(f"Recent lows for {pair}:")
         for idx, low in enumerate(recent_lows[pair], 1):
             logging.info(f"Low {idx}: Price: {low['price']}, Volume: {low['volume']}, Time: {low['time']}")
 
-    # Check if we have 3 new lows and decreasing volume trend
+    # Check if we have 3 new lows and a decreasing volume trend
     if len(recent_lows[pair]) == 3:
+        # Extract the volumes at each of the three recent lows
         volumes = [low['volume'] for low in recent_lows[pair]]
-        avg_volume = sum(volume_data) / len(volume_data) if len(volume_data) > 0 else 1  # Avoid division by zero
-        logging.info(f"Average volume for {pair}: {avg_volume}, Volumes at lows: {volumes}")
+        
+        # Calculate the average volume (this should be 1-minute volumes)
+        avg_volume = sum(volume_data[-5:]) / len(volume_data[-5:]) if len(volume_data) >= 5 else sum(volume_data) / len(volume_data)
+        logging.info(f"Average volume for {pair} (last 5 mins): {avg_volume}, Volumes at lows: {volumes}")
+
+        # Check for the volume threshold and a decreasing pattern in volume
         if all(v > avg_volume * HIGH_VOLUME_THRESHOLD for v in volumes) and volumes[0] > volumes[1] > volumes[2]:
+            # Generate the signal if the conditions are met
             signal_message = (
                 f"⚠️ NEW LOW DETECTED - 3rd Low!\n\n"
                 f"PAIR: {pair}\n"
@@ -68,5 +77,6 @@ def generate_new_signal(pair, current_price, price_data, volume_data, current_ti
             logging.info(f"Signal Generated for {pair}: {signal_message}")
             return signal_message
 
+    # Log when no signal is generated
     logging.info(f"No signal generated for {pair}.")
     return False
