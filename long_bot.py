@@ -18,6 +18,9 @@ price_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 volume_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 oi_history = {symbol: deque(maxlen=60) for symbol in SYMBOLS}
 
+# Recent lows tracking for the new signal generation logic
+recent_lows = {symbol: deque(maxlen=3) for symbol in SYMBOLS}
+
 # Function to safely calculate changes
 def safe_calculate(change, old_value):
     if change is None or old_value is None:
@@ -26,6 +29,34 @@ def safe_calculate(change, old_value):
         return (change - old_value) / old_value * 100
     except (ZeroDivisionError, TypeError):
         return None
+
+# Function to update lows with new low logic
+def update_lows(pair, current_price, current_volume, current_time):
+    """
+    Update the recent lows with the new price if it's lower than the highest of the current lows.
+    Then sort the lows to ensure Low 1 is the highest and Low 3 is the lowest.
+    """
+    if len(recent_lows[pair]) < 3:
+        recent_lows[pair].append({
+            'price': current_price,
+            'volume': current_volume,
+            'time': current_time
+        })
+    else:
+        # Replace the highest low if the current price is lower
+        highest_low = max(recent_lows[pair], key=lambda x: x['price'])
+        if current_price < highest_low['price']:
+            highest_index = recent_lows[pair].index(highest_low)
+            recent_lows[pair][highest_index] = {
+                'price': current_price,
+                'volume': current_volume,
+                'time': current_time
+            }
+
+    # Sort lows by price, ensuring Low 1 is highest and Low 3 is lowest
+    recent_lows[pair] = deque(sorted(recent_lows[pair], key=lambda x: x['price'], reverse=True), maxlen=3)
+
+    logging.info(f"Updated recent lows for {pair}: {recent_lows[pair]}")
 
 # Function to monitor pairs and check for signal generation
 def monitor_pairs():
@@ -93,6 +124,7 @@ def monitor_pairs():
             signal = generate_signal(symbol, current_price, oi_changes, price_changes, volume_changes)
 
             # Call the new signal generation logic
+            update_lows(symbol, current_price, current_volume, time.time())  # Update recent lows
             new_signal = generate_new_signal(symbol, current_price, price_history[symbol], volume_history[symbol], time.time())
 
             # Log whether a signal was generated from either logic
